@@ -231,27 +231,57 @@ Faites preuve de pédagogie et soyez clair dans vos explications et procedures d
 **Exercice 1 :**  
 Quels sont les composants dont la perte entraîne une perte de données ?  
   
-*..Répondez à cet exercice ici..*
+Les composants critiques sont :
+
+Le volume physique (disque/stockage) sous-jacent au PersistentVolume (PV) — si le disque tombe, les données sont perdues.
+Le nœud hébergeant le stockage (dans un setup hostPath ou local) — pas de réplication, donc perte totale si le nœud est perdu.
+etcd (base de données de Kubernetes) — contient l'état du cluster. Sa perte empêche toute reconstruction cohérente.
 
 **Exercice 2 :**  
 Expliquez nous pourquoi nous n'avons pas perdu les données lors de la supression du PVC pra-data  
   
-*..Répondez à cet exercice ici..*
+Grâce à la Reclaim Policy du PersistentVolume (PV) associé.
+Quand la policy est Retain (et non Delete), la suppression du PVC ne supprime pas le PV ni les données physiques. Le PV passe simplement en statut Released. Les données restent intactes sur le stockage sous-jacent jusqu'à action manuelle explicite.
+
+En résumé : le PVC est un "ticket d'accès", pas le conteneur des données. Supprimer le ticket ne détruit pas le coffre.
 
 **Exercice 3 :**  
 Quels sont les RTO et RPO de cette solution ?  
   
-*..Répondez à cet exercice ici..*
+Le RPO (perte de données maximale acceptable) est proche de zéro en conditions normales, car les données persistent sur le PV tant que le nœud est sain. En revanche, en cas de perte du nœud, le RPO devient total.
+Le RTO (temps de reprise) est estimé à 5–15 minutes, correspondant au temps nécessaire pour recréer manuellement le PVC et redéployer le pod. Ce délai est entièrement dépendant d'une intervention humaine.
 
 **Exercice 4 :**  
 Pourquoi cette solution (cet atelier) ne peux pas être utilisé dans un vrai environnement de production ? Que manque-t-il ?   
   
-*..Répondez à cet exercice ici..*
+Stockage local (hostPath) : aucune réplication, lié à un seul nœud — Single Point of Failure.
+Pas de sauvegarde automatisée : aucun snapshot, aucune politique de backup.
+Pas de haute disponibilité : un seul pod, un seul nœud.
+Restauration manuelle : le PRA nécessite une intervention humaine, ce qui allonge le RTO.
+Pas de monitoring/alerting sur l'état du stockage.
   
 **Exercice 5 :**  
 Proposez une archtecture plus robuste.   
   
-*..Répondez à cet exercice ici..*
+┌──────────────────────────────┐
+                   │      Load Balancer / Ingress  │
+                   └────────────┬─────────────────┘
+                                │
+               ┌────────────────┼────────────────┐
+               ▼                ▼                ▼
+          [Pod replica 1]  [Pod replica 2]  [Pod replica 3]
+               └────────────────┼────────────────┘
+                                │
+                   ┌────────────▼─────────────┐
+                   │   Stockage distribué      │
+                   │  (Ceph / EBS / NFS ...)   │
+                   │   Réplication 3x          │
+                   └────────────┬──────────────┘
+                                │
+                   ┌────────────▼──────────────┐
+                   │  Snapshots automatiques   │
+                   │  (Velero + stockage S3)   │
+                   └───────────────────────────┘
 
 ---------------------------------------------------
 Séquence 6 : Ateliers  
